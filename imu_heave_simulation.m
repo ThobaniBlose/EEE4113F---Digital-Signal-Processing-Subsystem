@@ -11,16 +11,29 @@ Ts = 1/fs;                 % Sampling period [s]
 T_total = 30*60;           % Total simulation time [s] = 30 minutes
 t = (0:Ts:T_total-Ts)';    % Time vector [s]
 
-%% True heave motion parameters
-A = 0.10;                  % Heave amplitude [m]
-f0 = 0.20;                 % Wave frequency [Hz]
-phi = 0;                   % Phase [rad]
+%% True heave motion parameters - multi-sine sea state
+% Modelling choice for this test:
+% represent the sea surface as a sum of a few sinusoidal components
+% with different amplitudes, frequencies, and random phases
 
-%% True heave motion
-eta = A*sin(2*pi*f0*t + phi);                 % Displacement [m]
-v   = 2*pi*f0*A*cos(2*pi*f0*t + phi);         % Velocity [m/s]
-a   = -(2*pi*f0)^2*A*sin(2*pi*f0*t + phi);    % Acceleration [m/s^2]
+N = 4;                                      % number of wave components
 
+A_vec = [0.040; 0.025; 0.015; 0.010];       % amplitudes [m]
+f_vec = [0.12; 0.18; 0.26; 0.34];           % frequencies [Hz]
+
+rng(10);                                    % for repeatable random phases
+phi_vec = 2*pi*rand(N,1);                   % random phases [rad]
+
+%% True heave motion - multi-sine
+eta = zeros(size(t));                       % displacement [m]
+v   = zeros(size(t));                       % velocity [m/s]
+a   = zeros(size(t));                       % acceleration [m/s^2]
+
+for i = 1:N
+    eta = eta + A_vec(i)*sin(2*pi*f_vec(i)*t + phi_vec(i));
+    v   = v   + 2*pi*f_vec(i)*A_vec(i)*cos(2*pi*f_vec(i)*t + phi_vec(i));
+    a   = a   - (2*pi*f_vec(i))^2*A_vec(i)*sin(2*pi*f_vec(i)*t + phi_vec(i));
+end
 %% Plot true motion
 t_zoom_end = 20;                          % zoom window [s]
 idx_zoom = t <= t_zoom_end;
@@ -732,3 +745,25 @@ fprintf('fp   = %.6f Hz\n', fp_est);
 fprintf('Tp   = %.6f s\n', Tp_est);
 fprintf('Tm01 = %.6f s\n', Tm01_est);
 fprintf('Tm02 = %.6f s\n', Tm02_est);
+
+%% Compare estimated elevation PSD with the true input component frequencies
+% This helps verify that the recovered spectrum contains the frequencies
+% that were intentionally placed in the simulated sea state.
+
+figure;
+plot(f_eta, See_true, 'LineWidth', 1.4); hold on;
+plot(f_psd, See_est, 'LineWidth', 1.2);
+
+% Mark the input component frequencies
+for i = 1:length(f_vec)
+    xline(f_vec(i), '--k', sprintf('f_%d = %.2f Hz', i, f_vec(i)), ...
+        'LabelVerticalAlignment', 'middle', ...
+        'LabelHorizontalAlignment', 'left');
+end
+
+grid on;
+xlabel('Frequency [Hz]');
+ylabel('PSD [m^2/Hz]');
+title('Wave Elevation PSD with Input Component Frequencies');
+legend('True elevation PSD', 'Estimated elevation PSD', 'Location', 'best');
+xlim([0 0.5]);
